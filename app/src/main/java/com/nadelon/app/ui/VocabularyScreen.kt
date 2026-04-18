@@ -34,6 +34,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
@@ -41,6 +42,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.nadelon.app.model.VocabEntry
 import com.nadelon.app.ui.theme.Nadelon
 
 // The notebook. A column of entries separated by thin oak rules, the way a ruled page
@@ -48,6 +50,7 @@ import com.nadelon.app.ui.theme.Nadelon
 // the original subtitle line sits as a pull-quote, italic, recessed.
 @Composable
 fun VocabularyScreen(vm: AppViewModel = viewModel()) {
+    val context = LocalContext.current
     val entries by vm.vocabulary.collectAsState()
     var query by remember { mutableStateOf("") }
     var confirmClear by remember { mutableStateOf(false) }
@@ -89,6 +92,14 @@ fun VocabularyScreen(vm: AppViewModel = viewModel()) {
                 )
             }
             if (entries.isNotEmpty()) {
+                Text(
+                    "export",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = palette.lamplight,
+                    textDecoration = TextDecoration.Underline,
+                    modifier = Modifier.clickable { exportNotebook(context, entries) }
+                )
+                Spacer(Modifier.width(Nadelon.Space.reading))
                 Text(
                     "clear",
                     style = MaterialTheme.typography.labelLarge,
@@ -261,6 +272,21 @@ private fun RuledLine() {
             .background(Nadelon.palette.oak)
     )
 }
+
+private fun exportNotebook(context: android.content.Context, entries: List<VocabEntry>) {
+    val header = "term\ttranslation\tcontext\tsource_lang\ttarget_lang"
+    val rows = entries.joinToString("\n") { e ->
+        "${e.term.tsv()}\t${e.translation.tsv()}\t${e.context.tsv()}\t${e.sourceLang}\t${e.targetLang}"
+    }
+    val intent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+        type = "text/plain"
+        putExtra(android.content.Intent.EXTRA_SUBJECT, "Nadelon Notebook")
+        putExtra(android.content.Intent.EXTRA_TEXT, "$header\n$rows")
+    }
+    context.startActivity(android.content.Intent.createChooser(intent, "Export notebook"))
+}
+
+private fun String.tsv() = replace("\t", " ").replace("\n", " ")
 
 @Composable
 private fun EmptyNotebook() {

@@ -1,8 +1,9 @@
 package com.nadelon.app.ui
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -33,10 +34,13 @@ import com.nadelon.app.ui.theme.Nadelon
 // The subtitle is a line on a page, not a caption. A warm parchment-wash lies across the
 // bottom of the frame like the bottom of a book; a single hair-line rule separates it from
 // the film above. Tapped words ripple in lamplight — a highlighter stroke, not a button.
+// Long-press anywhere on the bar to translate the full line.
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun BoxScope.SubtitleOverlay(
     cue: SubtitleCue?,
     onWordTap: (word: String, line: String) -> Unit,
+    onLineLongPress: (line: String) -> Unit,
 ) {
     if (cue == null) return
     val lines = remember(cue) { cue.text.lines().filter { it.isNotBlank() } }
@@ -58,6 +62,11 @@ fun BoxScope.SubtitleOverlay(
                 color = palette.oakStrong,
                 shape = RoundedCornerShape(Nadelon.Radius.card)
             )
+            .combinedClickable(
+                onClick = {},
+                onLongClick = { onLineLongPress(cue.text) },
+                onLongClickLabel = "Translate line",
+            )
             .padding(
                 horizontal = Nadelon.Space.column,
                 vertical = Nadelon.Space.reading
@@ -72,19 +81,21 @@ fun BoxScope.SubtitleOverlay(
                 WordFlow(
                     line = line,
                     inkColor = palette.ink,
-                    onWordTap = { w -> onWordTap(w, line) }
+                    onWordTap = { w -> onWordTap(w, line) },
+                    onLineLongPress = onLineLongPress,
                 )
             }
         }
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
+@OptIn(ExperimentalLayoutApi::class, ExperimentalFoundationApi::class)
 @Composable
 private fun WordFlow(
     line: String,
     inkColor: Color,
     onWordTap: (String) -> Unit,
+    onLineLongPress: (String) -> Unit,
 ) {
     val tokens = remember(line) { tokenize(line) }
     FlowRow(
@@ -102,10 +113,13 @@ private fun WordFlow(
                     modifier = Modifier
                         .minimumInteractiveComponentSize()
                         .clip(RoundedCornerShape(Nadelon.Radius.input))
-                        .clickable(
+                        .combinedClickable(
                             onClickLabel = "Translate",
                             role = Role.Button,
-                        ) { onWordTap(token.text) }
+                            onClick = { onWordTap(token.text) },
+                            onLongClick = { onLineLongPress(line) },
+                            onLongClickLabel = "Translate line",
+                        )
                         .semantics { contentDescription = "Translate ${token.text}" }
                         .padding(horizontal = 2.dp)
                 )
@@ -124,7 +138,7 @@ private fun WordFlow(
 
 private data class Token(val text: String, val isWord: Boolean)
 
-private val TOKEN_REGEX = Regex("""[\p{L}\p{M}\p{N}][\p{L}\p{M}\p{N}'’\-]*|[^\p{L}\p{M}\p{N}]+""")
+private val TOKEN_REGEX = Regex("""[\p{L}\p{M}\p{N}][\p{L}\p{M}\p{N}''\-]*|[^\p{L}\p{M}\p{N}]+""")
 
 private fun tokenize(line: String): List<Token> {
     val result = mutableListOf<Token>()

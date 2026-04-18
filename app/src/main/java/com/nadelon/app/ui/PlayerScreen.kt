@@ -27,7 +27,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Replay
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.SkipNext
+import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
@@ -68,6 +71,7 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 import com.nadelon.app.data.SubtitleParser
 import com.nadelon.app.data.queryDisplayName
+import com.nadelon.app.model.SubtitleCue
 import com.nadelon.app.ui.theme.Nadelon
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -91,6 +95,18 @@ private val LANG_OPTIONS = listOf(
     "hi" to "Hindi",
 )
 
+private val SPEEDS = listOf(0.5f, 0.75f, 1.0f, 1.25f)
+
+private fun formatSpeed(f: Float): String {
+    val s = if (f == f.toLong().toFloat()) "${f.toLong()}" else "$f"
+    return "${s}×"
+}
+
+private fun formatOffsetLabel(ms: Long): String {
+    val s = ms / 1000.0
+    return if (s >= 0) "+%.1f s".format(s) else "%.1f s".format(s)
+}
+
 // The film dominates. Controls are a thin shelf — a bookshelf above the page, not a UI.
 // Language selection reads left-to-right: "en → es", the arrow is literal ("from, to").
 // "Find subtitles" lives in the margin as a small text link, not as a chunky button.
@@ -105,6 +121,9 @@ fun PlayerScreen(vm: AppViewModel = viewModel()) {
     val pauseOnTap by vm.pauseOnTap.collectAsState()
     val selected by vm.selectedWord.collectAsState()
     val openSubs by vm.openSubsState.collectAsState()
+    val playbackSpeed by vm.playbackSpeed.collectAsState()
+    val autoPauseCueEnd by vm.autoPauseCueEnd.collectAsState()
+    val subtitleOffsetMs by vm.subtitleOffsetMs.collectAsState()
 
     val exoPlayer = remember {
         ExoPlayer.Builder(context).build().apply { playWhenReady = false }
@@ -113,7 +132,12 @@ fun PlayerScreen(vm: AppViewModel = viewModel()) {
     DisposableEffect(lifecycle) {
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
-                Lifecycle.Event.ON_PAUSE -> exoPlayer.playWhenReady = false
+                Lifecycle.Event.ON_PAUSE -> {
+                    exoPlayer.playWhenReady = false
+                    vm.videoUri.value?.let { uri ->
+                        vm.saveResumePosition(uri, exoPlayer.currentPosition)
+                    }
+                }
                 Lifecycle.Event.ON_STOP -> exoPlayer.pause()
                 else -> Unit
             }
@@ -124,11 +148,18 @@ fun PlayerScreen(vm: AppViewModel = viewModel()) {
             exoPlayer.release()
         }
     }
+
     LaunchedEffect(videoUri) {
         val uri = videoUri ?: return@LaunchedEffect
         exoPlayer.setMediaItem(MediaItem.fromUri(uri))
         exoPlayer.prepare()
+        val resumePos = vm.getResumePosition(uri)
+        if (resumePos > 0L) exoPlayer.seekTo(resumePos)
         exoPlayer.playWhenReady = true
+    }
+
+    LaunchedEffect(playbackSpeed) {
+        exoPlayer.setPlaybackSpeed(playbackSpeed)
     }
 
     var positionMs by remember { mutableStateOf(0L) }
@@ -137,6 +168,43 @@ fun PlayerScreen(vm: AppViewModel = viewModel()) {
             if (exoPlayer.isPlaying) positionMs = exoPlayer.currentPosition
             delay(150)
         }
+    }
+
+    val adjustedPositionMs = positionMs - subtitleOffsetMs
+    val currentCue = remember(cues, adjustedPositionMs) {
+        SubtitleParser.cueAt(cues, adjustedPositionMs)
+    }
+
+    // Auto-pause at end of every subtitle line
+    val prevCueHolder = remember { object { var cue: SubtitleCue? = null } }
+    LaunchedEffect(currentCue) {
+        val shouldPause = autoPauseCueEnd
+            && prevCueHolder.cue != null
+            && currentCue != prevCueHolder.cue
+        prevCueHolder.cue = currentCue
+        if (shouldPause) exoPlayer.pause()
+    }
+
+    // Cue navigation — seek is offset-aware
+    val onReplayCue = {
+        currentCue?.let { exoPlayer.seekTo(it.startMs + subtitleOffsetMs) }
+        Unit
+    }
+    val onPrevCue = {
+        val adj = positionMs - subtitleOffsetMs
+        val target = if (currentCue != null && adj - currentCue.startMs > 1000L) {
+            currentCue
+        } else {
+            cues.lastOrNull { it.endMs < (currentCue?.startMs ?: adj) }
+        }
+        target?.let { exoPlayer.seekTo(it.startMs + subtitleOffsetMs) }
+        Unit
+    }
+    val onNextCue = {
+        val adj = positionMs - subtitleOffsetMs
+        cues.firstOrNull { it.startMs > adj }
+            ?.let { exoPlayer.seekTo(it.startMs + subtitleOffsetMs) }
+        Unit
     }
 
     val videoPicker = rememberLauncherForActivityResult(
@@ -155,10 +223,6 @@ fun PlayerScreen(vm: AppViewModel = viewModel()) {
         ActivityResultContracts.OpenDocument()
     ) { uri: Uri? ->
         uri?.let { vm.loadSubtitles(it, context.queryDisplayName(it)) }
-    }
-
-    val currentCue = remember(cues, positionMs) {
-        SubtitleParser.cueAt(cues, positionMs)
     }
 
     val palette = Nadelon.palette
@@ -201,6 +265,10 @@ fun PlayerScreen(vm: AppViewModel = viewModel()) {
                     onWordTap = { word, line ->
                         if (pauseOnTap && exoPlayer.isPlaying) exoPlayer.pause()
                         vm.selectWord(word, line)
+                    },
+                    onLineLongPress = { line ->
+                        if (pauseOnTap && exoPlayer.isPlaying) exoPlayer.pause()
+                        vm.translateLine(line)
                     }
                 )
             } else {
@@ -208,6 +276,21 @@ fun PlayerScreen(vm: AppViewModel = viewModel()) {
                     onPickVideo = { videoPicker.launch(arrayOf("video/*")) }
                 )
             }
+        }
+
+        // Cue controls: « replay » + speed toggle + line-end auto-pause
+        if (videoUri != null) {
+            CueControlsRow(
+                cues = cues,
+                currentCue = currentCue,
+                onPrevCue = onPrevCue,
+                onReplayCue = onReplayCue,
+                onNextCue = onNextCue,
+                playbackSpeed = playbackSpeed,
+                onSpeedChange = vm::setPlaybackSpeed,
+                autoPauseCueEnd = autoPauseCueEnd,
+                onToggleAutoPause = vm::toggleAutoPauseCueEnd,
+            )
         }
 
         // Shelf — a thin strip of controls. Becomes even quieter once a video is loaded.
@@ -238,6 +321,14 @@ fun PlayerScreen(vm: AppViewModel = viewModel()) {
             pauseOnTap = pauseOnTap,
             onTogglePause = vm::togglePauseOnTap,
         )
+
+        // Subtitle timing offset — only shown when subtitles are loaded
+        if (cues.isNotEmpty()) {
+            OffsetRow(
+                offsetMs = subtitleOffsetMs,
+                onAdjust = vm::adjustSubtitleOffset,
+            )
+        }
 
         openSubs.message?.takeIf { !openSubs.showResults }?.let { msg ->
             MarginNote(msg)
@@ -292,6 +383,101 @@ private fun EmptyFrame(onPickVideo: () -> Unit) {
         )
         Spacer(Modifier.height(Nadelon.Space.reading))
         TextLink(text = "Open a film", onClick = onPickVideo)
+    }
+}
+
+@Composable
+private fun CueControlsRow(
+    cues: List<SubtitleCue>,
+    currentCue: SubtitleCue?,
+    onPrevCue: () -> Unit,
+    onReplayCue: () -> Unit,
+    onNextCue: () -> Unit,
+    playbackSpeed: Float,
+    onSpeedChange: (Float) -> Unit,
+    autoPauseCueEnd: Boolean,
+    onToggleAutoPause: () -> Unit,
+) {
+    val palette = Nadelon.palette
+    val hasCues = cues.isNotEmpty()
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        IconButton(onClick = onPrevCue, enabled = hasCues) {
+            Icon(
+                Icons.Filled.SkipPrevious,
+                contentDescription = "Previous cue",
+                tint = if (hasCues) palette.inkFaint else palette.muted,
+            )
+        }
+        IconButton(onClick = onReplayCue, enabled = currentCue != null) {
+            Icon(
+                Icons.Filled.Replay,
+                contentDescription = "Replay cue",
+                tint = if (currentCue != null) palette.inkFaint else palette.muted,
+            )
+        }
+        IconButton(onClick = onNextCue, enabled = hasCues) {
+            Icon(
+                Icons.Filled.SkipNext,
+                contentDescription = "Next cue",
+                tint = if (hasCues) palette.inkFaint else palette.muted,
+            )
+        }
+        Spacer(Modifier.weight(1f))
+        SPEEDS.forEach { speed ->
+            val selected = speed == playbackSpeed
+            Text(
+                text = formatSpeed(speed),
+                color = if (selected) palette.lamplight else palette.margin,
+                style = MaterialTheme.typography.labelMedium,
+                textDecoration = if (selected) TextDecoration.Underline else TextDecoration.None,
+                modifier = Modifier
+                    .clickable { onSpeedChange(speed) }
+                    .padding(horizontal = 4.dp),
+            )
+        }
+        Spacer(Modifier.width(Nadelon.Space.snug))
+        Text(
+            text = if (autoPauseCueEnd) "line end · on" else "line end · off",
+            style = MaterialTheme.typography.labelMedium,
+            color = if (autoPauseCueEnd) palette.lamplight else palette.margin,
+            textDecoration = TextDecoration.Underline,
+            modifier = Modifier.clickable { onToggleAutoPause() }
+        )
+    }
+}
+
+@Composable
+private fun OffsetRow(offsetMs: Long, onAdjust: (Long) -> Unit) {
+    val palette = Nadelon.palette
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(Nadelon.Space.tight),
+    ) {
+        Text(
+            "sub offset",
+            style = MaterialTheme.typography.labelMedium,
+            color = palette.margin,
+        )
+        Text(
+            "−",
+            color = palette.inkFaint,
+            style = MaterialTheme.typography.labelLarge,
+            modifier = Modifier.clickable { onAdjust(-500L) },
+        )
+        Text(
+            formatOffsetLabel(offsetMs),
+            style = MaterialTheme.typography.labelMedium,
+            color = palette.ink,
+        )
+        Text(
+            "+",
+            color = palette.inkFaint,
+            style = MaterialTheme.typography.labelLarge,
+            modifier = Modifier.clickable { onAdjust(+500L) },
+        )
     }
 }
 

@@ -6,6 +6,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.nadelon.app.data.OpenSubResult
 import com.nadelon.app.data.OpenSubtitlesRepository
+import com.nadelon.app.data.ResumeStore
 import com.nadelon.app.data.Settings
 import com.nadelon.app.data.SettingsStore
 import com.nadelon.app.data.SubtitleParser
@@ -30,6 +31,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     private val vocabStore = VocabularyStore(app)
     private val settingsStore = SettingsStore(app)
     private val openSubs = OpenSubtitlesRepository(settingsStore)
+    private val resumeStore = ResumeStore(app)
 
     private val _videoUri = MutableStateFlow<Uri?>(null)
     val videoUri: StateFlow<Uri?> = _videoUri.asStateFlow()
@@ -57,6 +59,15 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     private val _openSubsState = MutableStateFlow(OpenSubsState())
     val openSubsState: StateFlow<OpenSubsState> = _openSubsState.asStateFlow()
+
+    private val _playbackSpeed = MutableStateFlow(1f)
+    val playbackSpeed: StateFlow<Float> = _playbackSpeed.asStateFlow()
+
+    private val _autoPauseCueEnd = MutableStateFlow(false)
+    val autoPauseCueEnd: StateFlow<Boolean> = _autoPauseCueEnd.asStateFlow()
+
+    private val _subtitleOffsetMs = MutableStateFlow(0L)
+    val subtitleOffsetMs: StateFlow<Long> = _subtitleOffsetMs.asStateFlow()
 
     val vocabulary: StateFlow<List<VocabEntry>> = vocabStore.entries
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
@@ -96,6 +107,31 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun setSourceLang(lang: String) { _sourceLang.value = lang }
     fun setTargetLang(lang: String) { _targetLang.value = lang }
     fun togglePauseOnTap() { _pauseOnTap.value = !_pauseOnTap.value }
+    fun setPlaybackSpeed(speed: Float) { _playbackSpeed.value = speed }
+    fun toggleAutoPauseCueEnd() { _autoPauseCueEnd.value = !_autoPauseCueEnd.value }
+    fun adjustSubtitleOffset(deltaMs: Long) { _subtitleOffsetMs.value += deltaMs }
+
+    fun saveResumePosition(uri: Uri, positionMs: Long) {
+        if (positionMs < 5_000L) return
+        viewModelScope.launch { resumeStore.save(uri.toString(), positionMs) }
+    }
+
+    suspend fun getResumePosition(uri: Uri): Long = resumeStore.get(uri.toString())
+
+    fun translateLine(line: String) {
+        if (line.isBlank()) return
+        _selectedWord.value = SelectedWord(line, line, null, TranslationState.Loading)
+        translationJob?.cancel()
+        translationJob = viewModelScope.launch {
+            val result = translator.translate(line, _sourceLang.value, _targetLang.value)
+            val current = _selectedWord.value ?: return@launch
+            if (current.term != line) return@launch
+            _selectedWord.value = result.fold(
+                onSuccess = { current.copy(translation = it, state = TranslationState.Success) },
+                onFailure = { current.copy(translation = null, state = TranslationState.Failed) }
+            )
+        }
+    }
 
     fun selectWord(word: String, context: String) {
         val cleaned = word.cleanedWord()
