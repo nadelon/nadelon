@@ -1,6 +1,7 @@
 package com.nadelon.app.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -22,11 +23,16 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.nadelon.app.model.SubtitleCue
+import com.nadelon.app.ui.theme.Nadelon
 
+// The subtitle is a line on a page, not a caption. A warm parchment-wash lies across the
+// bottom of the frame like the bottom of a book; a single hair-line rule separates it from
+// the film above. Tapped words ripple in lamplight — a highlighter stroke, not a button.
 @Composable
 fun BoxScope.SubtitleOverlay(
     cue: SubtitleCue?,
@@ -34,22 +40,40 @@ fun BoxScope.SubtitleOverlay(
 ) {
     if (cue == null) return
     val lines = remember(cue) { cue.text.lines().filter { it.isNotBlank() } }
-    Column(
+    val palette = Nadelon.palette
+
+    Box(
         modifier = Modifier
             .align(Alignment.BottomCenter)
             .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 36.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(6.dp)
+            .padding(
+                horizontal = Nadelon.Space.snug,
+                vertical = Nadelon.Space.column
+            )
+            .clip(RoundedCornerShape(Nadelon.Radius.card))
+            // plate at 0.86 alpha — a wash, not a bar. The film shows through faintly.
+            .background(palette.plate.copy(alpha = 0.86f))
+            .border(
+                width = 0.5.dp,
+                color = palette.oakStrong,
+                shape = RoundedCornerShape(Nadelon.Radius.card)
+            )
+            .padding(
+                horizontal = Nadelon.Space.column,
+                vertical = Nadelon.Space.reading
+            )
     ) {
-        lines.forEach { line ->
-            Box(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(Color(0xCC000000))
-                    .padding(horizontal = 10.dp, vertical = 4.dp)
-            ) {
-                WordFlow(line = line, onWordTap = { w -> onWordTap(w, line) })
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(Nadelon.Space.tight)
+        ) {
+            lines.forEach { line ->
+                WordFlow(
+                    line = line,
+                    inkColor = palette.ink,
+                    onWordTap = { w -> onWordTap(w, line) }
+                )
             }
         }
     }
@@ -57,7 +81,11 @@ fun BoxScope.SubtitleOverlay(
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun WordFlow(line: String, onWordTap: (String) -> Unit) {
+private fun WordFlow(
+    line: String,
+    inkColor: Color,
+    onWordTap: (String) -> Unit,
+) {
     val tokens = remember(line) { tokenize(line) }
     FlowRow(
         horizontalArrangement = Arrangement.Center,
@@ -67,12 +95,13 @@ private fun WordFlow(line: String, onWordTap: (String) -> Unit) {
             if (token.isWord) {
                 Text(
                     text = token.text,
-                    color = Color.White,
+                    color = inkColor,
                     fontSize = 20.sp,
-                    fontWeight = FontWeight.SemiBold,
+                    fontFamily = FontFamily.Serif,
+                    fontWeight = FontWeight.Medium,
                     modifier = Modifier
                         .minimumInteractiveComponentSize()
-                        .clip(RoundedCornerShape(4.dp))
+                        .clip(RoundedCornerShape(Nadelon.Radius.input))
                         .clickable(
                             onClickLabel = "Translate",
                             role = Role.Button,
@@ -83,9 +112,10 @@ private fun WordFlow(line: String, onWordTap: (String) -> Unit) {
             } else {
                 Text(
                     text = token.text,
-                    color = Color.White,
+                    color = inkColor,
                     fontSize = 20.sp,
-                    fontWeight = FontWeight.SemiBold
+                    fontFamily = FontFamily.Serif,
+                    fontWeight = FontWeight.Medium,
                 )
             }
         }

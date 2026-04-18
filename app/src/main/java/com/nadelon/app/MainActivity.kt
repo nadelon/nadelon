@@ -7,30 +7,49 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Bookmark
-import androidx.compose.material.icons.filled.PlayCircle
-import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.AutoStories
+import androidx.compose.material.icons.filled.Lightbulb
+import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.unit.dp
 import com.nadelon.app.ui.AppViewModel
 import com.nadelon.app.ui.PlayerScreen
 import com.nadelon.app.ui.SettingsScreen
 import com.nadelon.app.ui.VocabularyScreen
+import com.nadelon.app.ui.theme.Nadelon
 import com.nadelon.app.ui.theme.NadelonTheme
 
 class MainActivity : ComponentActivity() {
@@ -59,9 +78,6 @@ class MainActivity : ComponentActivity() {
             else -> null
         }
         uri ?: return
-        // Persistable permission only applies when the sender granted it explicitly.
-        // Most external players pass one-shot grants, which are already sufficient
-        // for this process to read via contentResolver during the session.
         if (intent.flags and Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION != 0) {
             runCatching {
                 contentResolver.takePersistableUriPermission(
@@ -81,44 +97,160 @@ class MainActivity : ComponentActivity() {
             intent.getParcelableExtra(Intent.EXTRA_STREAM)
 }
 
+// The frame is quiet. Serif wordmark with a subtitle that names the night's three verbs.
+// A single oak rule separates chrome from content. No elevation, no shadow.
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun NadelonApp(vm: AppViewModel) {
-    var tab by remember { mutableStateOf(Tab.Player) }
+    var tab by remember { mutableStateOf(Tab.Watch) }
+    val palette = Nadelon.palette
 
     Scaffold(
-        topBar = { TopAppBar(title = { Text("Nadelon") }) },
-        bottomBar = {
-            NavigationBar {
-                NavigationBarItem(
-                    selected = tab == Tab.Player,
-                    onClick = { tab = Tab.Player },
-                    icon = { Icon(Icons.Filled.PlayCircle, contentDescription = "Player tab") },
-                    label = { Text("Player") }
-                )
-                NavigationBarItem(
-                    selected = tab == Tab.Vocab,
-                    onClick = { tab = Tab.Vocab },
-                    icon = { Icon(Icons.Filled.Bookmark, contentDescription = "Vocabulary tab") },
-                    label = { Text("Vocabulary") }
-                )
-                NavigationBarItem(
-                    selected = tab == Tab.Settings,
-                    onClick = { tab = Tab.Settings },
-                    icon = { Icon(Icons.Filled.Settings, contentDescription = "Settings tab") },
-                    label = { Text("Settings") }
-                )
-            }
-        }
+        containerColor = palette.dusk,
+        contentColor = palette.ink,
+        topBar = { Wordmark() },
+        bottomBar = { ReadingRoomNav(selected = tab, onSelect = { tab = it }) }
     ) { padding ->
-        Box(modifier = Modifier.fillMaxSize().padding(padding)) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .background(palette.dusk)
+        ) {
             when (tab) {
-                Tab.Player -> PlayerScreen(vm = vm)
-                Tab.Vocab -> VocabularyScreen(vm = vm)
-                Tab.Settings -> SettingsScreen(vm = vm)
+                Tab.Watch -> PlayerScreen(vm = vm)
+                Tab.Notebook -> VocabularyScreen(vm = vm)
+                Tab.Study -> SettingsScreen(vm = vm)
             }
         }
     }
 }
 
-private enum class Tab { Player, Vocab, Settings }
+@Composable
+private fun Wordmark() {
+    val palette = Nadelon.palette
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(palette.dusk)
+            .windowInsetsPadding(WindowInsets.statusBars)
+            .padding(
+                horizontal = Nadelon.Space.column,
+                vertical = Nadelon.Space.reading,
+            )
+    ) {
+        Row(verticalAlignment = Alignment.Bottom) {
+            Text(
+                text = "Nadelon",
+                style = MaterialTheme.typography.headlineMedium,
+                color = palette.ink,
+            )
+            Spacer(Modifier.width(Nadelon.Space.snug))
+            Text(
+                text = "— a reading room for foreign films",
+                style = MaterialTheme.typography.labelMedium,
+                fontStyle = FontStyle.Italic,
+                color = palette.margin,
+                modifier = Modifier.padding(bottom = 4.dp)
+            )
+        }
+        Spacer(Modifier.height(Nadelon.Space.snug))
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(0.5.dp)
+                .background(palette.oak)
+        )
+    }
+}
+
+@Composable
+private fun ReadingRoomNav(selected: Tab, onSelect: (Tab) -> Unit) {
+    val palette = Nadelon.palette
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(palette.dusk)
+            .windowInsetsPadding(WindowInsets.navigationBars)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(0.5.dp)
+                .background(palette.oak)
+        )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(
+                    horizontal = Nadelon.Space.snug,
+                    vertical = Nadelon.Space.snug,
+                ),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            NavVerb(
+                label = "Watch",
+                icon = Icons.Filled.Movie,
+                selected = selected == Tab.Watch,
+                onClick = { onSelect(Tab.Watch) },
+                modifier = Modifier.weight(1f),
+            )
+            NavVerb(
+                label = "Notebook",
+                icon = Icons.Filled.AutoStories,
+                selected = selected == Tab.Notebook,
+                onClick = { onSelect(Tab.Notebook) },
+                modifier = Modifier.weight(1f),
+            )
+            NavVerb(
+                label = "Study",
+                icon = Icons.Filled.Lightbulb,
+                selected = selected == Tab.Study,
+                onClick = { onSelect(Tab.Study) },
+                modifier = Modifier.weight(1f),
+            )
+        }
+    }
+}
+
+@Composable
+private fun NavVerb(
+    label: String,
+    icon: ImageVector,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val palette = Nadelon.palette
+    val tint = if (selected) palette.lamplight else palette.margin
+    Column(
+        modifier = modifier
+            .clickable(
+                role = Role.Tab,
+                onClickLabel = "Switch to $label",
+                onClick = onClick,
+            )
+            .semantics { contentDescription = "$label tab" }
+            .padding(vertical = Nadelon.Space.snug),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = tint,
+            modifier = Modifier
+                .height(22.dp)
+                .width(22.dp)
+        )
+        Spacer(Modifier.height(2.dp))
+        Text(
+            text = label.lowercase(),
+            style = MaterialTheme.typography.labelMedium,
+            color = tint,
+            fontFamily = FontFamily.Serif,
+            fontStyle = if (selected) FontStyle.Normal else FontStyle.Italic,
+        )
+    }
+}
+
+private enum class Tab { Watch, Notebook, Study }

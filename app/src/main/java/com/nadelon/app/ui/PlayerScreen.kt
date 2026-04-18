@@ -3,37 +3,39 @@ package com.nadelon.app.ui
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.CloudDownload
+import androidx.compose.material.icons.filled.MenuBook
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Subtitles
-import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.AssistChip
-import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -51,11 +53,14 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.media3.common.MediaItem
@@ -63,6 +68,7 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 import com.nadelon.app.data.SubtitleParser
 import com.nadelon.app.data.queryDisplayName
+import com.nadelon.app.ui.theme.Nadelon
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 
@@ -85,6 +91,9 @@ private val LANG_OPTIONS = listOf(
     "hi" to "Hindi",
 )
 
+// The film dominates. Controls are a thin shelf — a bookshelf above the page, not a UI.
+// Language selection reads left-to-right: "en → es", the arrow is literal ("from, to").
+// "Find subtitles" lives in the margin as a small text link, not as a chunky button.
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PlayerScreen(vm: AppViewModel = viewModel()) {
@@ -152,130 +161,90 @@ fun PlayerScreen(vm: AppViewModel = viewModel()) {
         SubtitleParser.cueAt(cues, positionMs)
     }
 
+    val palette = Nadelon.palette
+
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(12.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp)
+            .padding(
+                horizontal = Nadelon.Space.column,
+                vertical = Nadelon.Space.reading
+            ),
+        verticalArrangement = Arrangement.spacedBy(Nadelon.Space.reading)
     ) {
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            OutlinedButton(
-                onClick = { videoPicker.launch(arrayOf("video/*")) },
-                modifier = Modifier.weight(1f)
-            ) {
-                Icon(Icons.Filled.VideoLibrary, contentDescription = null)
-                Text("  Video", maxLines = 1)
-            }
-            OutlinedButton(
-                onClick = {
-                    subsPicker.launch(
-                        arrayOf(
-                            "application/x-subrip",
-                            "text/vtt",
-                            "text/plain",
-                            "*/*"
-                        )
-                    )
-                },
-                modifier = Modifier.weight(1f)
-            ) {
-                Icon(Icons.Filled.Subtitles, contentDescription = null)
-                Text("  Subtitles", maxLines = 1)
-            }
-        }
-
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            LangDropdown(
-                label = "From",
-                selected = sourceLang,
-                onSelected = vm::setSourceLang,
-                modifier = Modifier.weight(1f)
-            )
-            LangDropdown(
-                label = "To",
-                selected = targetLang,
-                onSelected = vm::setTargetLang,
-                options = LANG_OPTIONS.filter { it.first != "auto" },
-                modifier = Modifier.weight(1f)
-            )
-        }
-
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            OutlinedButton(
-                onClick = { vm.searchOpenSubs() },
-                enabled = !openSubs.busy,
-                modifier = Modifier.weight(1f)
-            ) {
-                Icon(Icons.Filled.Search, contentDescription = null)
-                Text("  Find subtitles", maxLines = 1)
-            }
-        }
-
+        // The frame. When empty, the room is empty — a large invitation to open a film.
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .aspectRatio(16f / 9f)
-                .background(Color.Black, RoundedCornerShape(10.dp))
+                .clip(RoundedCornerShape(Nadelon.Radius.card))
+                .background(Color.Black)
+                .border(
+                    width = 0.5.dp,
+                    color = palette.oakStrong,
+                    shape = RoundedCornerShape(Nadelon.Radius.card)
+                )
         ) {
-            AndroidView(
-                factory = { ctx ->
-                    PlayerView(ctx).apply {
-                        useController = true
-                        player = exoPlayer
-                        setShowSubtitleButton(false)
+            if (videoUri != null) {
+                AndroidView(
+                    factory = { ctx ->
+                        PlayerView(ctx).apply {
+                            useController = true
+                            player = exoPlayer
+                            setShowSubtitleButton(false)
+                        }
+                    },
+                    modifier = Modifier.fillMaxSize()
+                )
+                SubtitleOverlay(
+                    cue = currentCue,
+                    onWordTap = { word, line ->
+                        if (pauseOnTap && exoPlayer.isPlaying) exoPlayer.pause()
+                        vm.selectWord(word, line)
                     }
-                },
-                modifier = Modifier.fillMaxSize()
-            )
-            SubtitleOverlay(
-                cue = currentCue,
-                onWordTap = { word, line ->
-                    if (pauseOnTap && exoPlayer.isPlaying) exoPlayer.pause()
-                    vm.selectWord(word, line)
-                }
-            )
+                )
+            } else {
+                EmptyFrame(
+                    onPickVideo = { videoPicker.launch(arrayOf("video/*")) }
+                )
+            }
         }
 
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            AssistChip(
-                onClick = vm::togglePauseOnTap,
-                label = {
-                    Text(if (pauseOnTap) "Pause on tap: on" else "Pause on tap: off")
-                }
-            )
-            Text(
-                text = if (cues.isEmpty()) "No subtitles loaded." else "${cues.size} cues loaded.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
+        // Shelf — a thin strip of controls. Becomes even quieter once a video is loaded.
+        Shelf(
+            hasVideo = videoUri != null,
+            sourceLang = sourceLang,
+            targetLang = targetLang,
+            onPickVideo = { videoPicker.launch(arrayOf("video/*")) },
+            onPickSubs = {
+                subsPicker.launch(
+                    arrayOf(
+                        "application/x-subrip",
+                        "text/vtt",
+                        "text/plain",
+                        "*/*"
+                    )
+                )
+            },
+            onSourceLang = vm::setSourceLang,
+            onTargetLang = vm::setTargetLang,
+            onFindSubtitles = { vm.searchOpenSubs() },
+            findBusy = openSubs.busy,
+        )
+
+        // Margin note: cue count + pause-on-tap as a subtle toggle, never a chip.
+        MarginRow(
+            cueCount = cues.size,
+            pauseOnTap = pauseOnTap,
+            onTogglePause = vm::togglePauseOnTap,
+        )
 
         openSubs.message?.takeIf { !openSubs.showResults }?.let { msg ->
-            Text(
-                msg,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            MarginNote(msg)
         }
 
         selected?.let { sel ->
-            TranslationCard(
+            IndexCard(
                 term = sel.term,
                 translation = sel.translation,
                 state = sel.state,
@@ -300,89 +269,311 @@ fun PlayerScreen(vm: AppViewModel = viewModel()) {
 }
 
 @Composable
-private fun TranslationCard(
-    term: String,
-    translation: String?,
-    state: TranslationState,
-    onSave: () -> Unit,
-    onDismiss: () -> Unit
-) {
-    Surface(
-        shape = RoundedCornerShape(12.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant,
-        modifier = Modifier
-            .fillMaxWidth()
-            .wrapContentHeight()
+private fun EmptyFrame(onPickVideo: () -> Unit) {
+    val palette = Nadelon.palette
+    Column(
+        modifier = Modifier.fillMaxSize(),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Column(modifier = Modifier.padding(14.dp)) {
-            Text(term, fontWeight = FontWeight.Bold, fontSize = 18.sp)
-            when (state) {
-                TranslationState.Loading -> Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.padding(top = 6.dp)
-                ) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(14.dp),
-                        strokeWidth = 2.dp
-                    )
-                    Text(
-                        "  Translating…",
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-                TranslationState.Success -> Text(
-                    translation.orEmpty(),
-                    color = MaterialTheme.colorScheme.secondary,
-                    modifier = Modifier.padding(top = 4.dp)
-                )
-                TranslationState.Failed -> Text(
-                    "Translation unavailable.",
-                    color = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.padding(top = 4.dp)
-                )
-            }
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 10.dp),
-                horizontalArrangement = Arrangement.End
+        Icon(
+            imageVector = Icons.Filled.PlayArrow,
+            contentDescription = null,
+            tint = palette.margin,
+            modifier = Modifier.size(40.dp)
+        )
+        Spacer(Modifier.height(Nadelon.Space.snug))
+        Text(
+            "An empty frame.",
+            fontFamily = FontFamily.Serif,
+            fontStyle = FontStyle.Italic,
+            color = palette.inkFaint,
+            style = MaterialTheme.typography.bodyLarge
+        )
+        Spacer(Modifier.height(Nadelon.Space.reading))
+        TextLink(text = "Open a film", onClick = onPickVideo)
+    }
+}
+
+@Composable
+private fun Shelf(
+    hasVideo: Boolean,
+    sourceLang: String,
+    targetLang: String,
+    onPickVideo: () -> Unit,
+    onPickSubs: () -> Unit,
+    onSourceLang: (String) -> Unit,
+    onTargetLang: (String) -> Unit,
+    onFindSubtitles: () -> Unit,
+    findBusy: Boolean,
+) {
+    val palette = Nadelon.palette
+    Column(verticalArrangement = Arrangement.spacedBy(Nadelon.Space.snug)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(Nadelon.Space.snug),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            ShelfButton(
+                label = if (hasVideo) "Film" else "Open film",
+                onClick = onPickVideo,
+                modifier = Modifier.weight(1f),
+            )
+            ShelfButton(
+                label = "Subtitle",
+                onClick = onPickSubs,
+                modifier = Modifier.weight(1f),
+            )
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(Nadelon.Space.snug),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            LangPill(
+                selected = sourceLang,
+                onSelected = onSourceLang,
+                modifier = Modifier.weight(1f),
+            )
+            Text(
+                "→",
+                color = palette.margin,
+                style = MaterialTheme.typography.titleLarge,
+            )
+            LangPill(
+                selected = targetLang,
+                onSelected = onTargetLang,
+                options = LANG_OPTIONS.filter { it.first != "auto" },
+                modifier = Modifier.weight(1f),
+            )
+            IconButton(
+                onClick = onFindSubtitles,
+                enabled = !findBusy,
             ) {
-                TextButton(onClick = onDismiss) { Text("Close") }
-                Button(
-                    onClick = onSave,
-                    enabled = state == TranslationState.Success && !translation.isNullOrBlank()
-                ) { Text("Save") }
+                Icon(
+                    imageVector = Icons.Filled.Search,
+                    contentDescription = "Find subtitles",
+                    tint = if (findBusy) palette.muted else palette.inkFaint,
+                )
             }
         }
     }
 }
 
 @Composable
-private fun LangDropdown(
+private fun ShelfButton(
     label: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val palette = Nadelon.palette
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(Nadelon.Radius.input),
+        color = palette.page,
+        border = BorderStroke(0.5.dp, palette.oakStrong),
+        modifier = modifier,
+    ) {
+        Text(
+            text = label,
+            color = palette.ink,
+            style = MaterialTheme.typography.labelLarge,
+            modifier = Modifier.padding(
+                horizontal = Nadelon.Space.reading,
+                vertical = Nadelon.Space.snug + Nadelon.Space.tight,
+            )
+        )
+    }
+}
+
+@Composable
+private fun LangPill(
     selected: String,
     onSelected: (String) -> Unit,
     modifier: Modifier = Modifier,
-    options: List<Pair<String, String>> = LANG_OPTIONS
+    options: List<Pair<String, String>> = LANG_OPTIONS,
 ) {
+    val palette = Nadelon.palette
     var expanded by remember { mutableStateOf(false) }
-    val selectedLabel = options.firstOrNull { it.first == selected }?.second ?: selected
+    val label = options.firstOrNull { it.first == selected }?.second ?: selected
     Box(modifier = modifier) {
-        OutlinedButton(
+        Surface(
             onClick = { expanded = true },
-            modifier = Modifier.fillMaxWidth()
+            shape = RoundedCornerShape(Nadelon.Radius.input),
+            color = palette.dusk,
+            border = BorderStroke(0.5.dp, palette.oak),
+            modifier = Modifier.fillMaxWidth(),
         ) {
-            Text("$label: $selectedLabel", maxLines = 1)
-            Icon(Icons.Filled.ArrowDropDown, contentDescription = null)
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(
+                    horizontal = Nadelon.Space.reading,
+                    vertical = Nadelon.Space.snug,
+                )
+            ) {
+                Text(
+                    text = selected.uppercase(),
+                    color = palette.ink,
+                    style = MaterialTheme.typography.labelMedium,
+                )
+                Text(
+                    text = "  $label",
+                    color = palette.inkFaint,
+                    style = MaterialTheme.typography.bodyMedium,
+                    maxLines = 1,
+                )
+            }
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             options.forEach { (code, display) ->
                 DropdownMenuItem(
-                    text = { Text(display) },
+                    text = {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                code.uppercase(),
+                                fontFamily = FontFamily.Monospace,
+                                color = palette.margin,
+                                modifier = Modifier.width(36.dp),
+                            )
+                            Text(display, color = palette.ink)
+                        }
+                    },
                     onClick = {
                         onSelected(code)
                         expanded = false
                     }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun MarginRow(
+    cueCount: Int,
+    pauseOnTap: Boolean,
+    onTogglePause: () -> Unit,
+) {
+    val palette = Nadelon.palette
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = if (cueCount == 0) "—  no subtitles yet"
+                   else "$cueCount cues · tap a word to annotate",
+            style = MaterialTheme.typography.labelMedium,
+            color = palette.margin,
+            modifier = Modifier.weight(1f),
+        )
+        Text(
+            text = if (pauseOnTap) "pause on tap · on" else "pause on tap · off",
+            style = MaterialTheme.typography.labelMedium,
+            color = if (pauseOnTap) palette.lamplight else palette.margin,
+            textDecoration = TextDecoration.Underline,
+            modifier = Modifier.clickable { onTogglePause() }
+        )
+    }
+}
+
+@Composable
+private fun MarginNote(text: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.bodySmall,
+        fontStyle = FontStyle.Italic,
+        color = Nadelon.palette.margin,
+    )
+}
+
+@Composable
+private fun TextLink(text: String, onClick: () -> Unit) {
+    Text(
+        text = text,
+        color = Nadelon.palette.lamplight,
+        style = MaterialTheme.typography.labelLarge,
+        textDecoration = TextDecoration.Underline,
+        modifier = Modifier.clickable { onClick() }
+    )
+}
+
+// A slipped index card — warmer surface, serif headword, the translation underlined like
+// a dictionary definition. Actions sit as text at the foot of the card, not chunky buttons.
+@Composable
+private fun IndexCard(
+    term: String,
+    translation: String?,
+    state: TranslationState,
+    onSave: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    val palette = Nadelon.palette
+    Surface(
+        shape = RoundedCornerShape(Nadelon.Radius.card),
+        color = palette.plate,
+        border = BorderStroke(0.5.dp, palette.oakStrong),
+        modifier = Modifier
+            .fillMaxWidth()
+            .wrapContentHeight()
+    ) {
+        Column(
+            modifier = Modifier.padding(
+                horizontal = Nadelon.Space.column,
+                vertical = Nadelon.Space.reading,
+            )
+        ) {
+            Text(
+                text = term,
+                color = palette.ink,
+                fontFamily = FontFamily.Serif,
+                fontWeight = FontWeight.SemiBold,
+                style = MaterialTheme.typography.headlineMedium,
+            )
+            Spacer(Modifier.height(Nadelon.Space.tight))
+            when (state) {
+                TranslationState.Loading -> Row(
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(12.dp),
+                        strokeWidth = 1.5.dp,
+                        color = palette.margin,
+                    )
+                    Text(
+                        "  looking it up…",
+                        color = palette.margin,
+                        fontStyle = FontStyle.Italic,
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                }
+                TranslationState.Success -> Text(
+                    text = translation.orEmpty(),
+                    color = palette.inkFaint,
+                    fontFamily = FontFamily.Serif,
+                    fontStyle = FontStyle.Italic,
+                    style = MaterialTheme.typography.bodyLarge,
+                )
+                TranslationState.Failed -> Text(
+                    "translation unavailable",
+                    color = palette.redInk,
+                    fontStyle = FontStyle.Italic,
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            }
+            Spacer(Modifier.height(Nadelon.Space.reading))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End,
+            ) {
+                TextLink(text = "close", onClick = onDismiss)
+                Spacer(Modifier.width(Nadelon.Space.gutter))
+                val canSave = state == TranslationState.Success && !translation.isNullOrBlank()
+                Text(
+                    text = "save to notebook",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = if (canSave) palette.lamplight else palette.muted,
+                    textDecoration = TextDecoration.Underline,
+                    modifier = if (canSave) Modifier.clickable { onSave() } else Modifier,
                 )
             }
         }
@@ -401,90 +592,125 @@ private fun OpenSubsDialog(
     onPick: (com.nadelon.app.data.OpenSubResult) -> Unit,
     onDismiss: () -> Unit
 ) {
+    val palette = Nadelon.palette
     AlertDialog(
         onDismissRequest = onDismiss,
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } },
-        title = { Text("Find subtitles") },
+        shape = RoundedCornerShape(Nadelon.Radius.dialog),
+        confirmButton = { TextButton(onClick = onDismiss) { Text("close") } },
+        title = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    Icons.Filled.MenuBook,
+                    contentDescription = null,
+                    tint = palette.lamplight,
+                    modifier = Modifier.size(18.dp),
+                )
+                Spacer(Modifier.width(Nadelon.Space.snug))
+                Text(
+                    "Catalogue — subtitles",
+                    style = MaterialTheme.typography.titleLarge,
+                )
+            }
+        },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(Nadelon.Space.reading)) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    horizontalArrangement = Arrangement.spacedBy(Nadelon.Space.snug),
                 ) {
                     OutlinedTextField(
                         value = query,
                         onValueChange = onQueryChange,
                         modifier = Modifier.weight(1f),
-                        label = { Text("Movie / show title") },
-                        singleLine = true
+                        label = { Text("title") },
+                        singleLine = true,
+                        shape = RoundedCornerShape(Nadelon.Radius.input),
                     )
-                    Button(onClick = onSearch, enabled = !busy) { Text("Search") }
+                    ShelfButton(
+                        label = if (busy) "…" else "Search",
+                        onClick = onSearch,
+                    )
                 }
                 if (busy) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        horizontalArrangement = Arrangement.spacedBy(Nadelon.Space.snug),
                     ) {
                         CircularProgressIndicator(
-                            modifier = Modifier.size(14.dp),
-                            strokeWidth = 2.dp
+                            modifier = Modifier.size(12.dp),
+                            strokeWidth = 1.5.dp,
+                            color = palette.margin,
                         )
-                        Text("Working…", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(
+                            "working…",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontStyle = FontStyle.Italic,
+                            color = palette.margin,
+                        )
                     }
                 }
-                message?.let {
-                    Text(
-                        it,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
+                message?.let { MarginNote(it) }
                 if (results.isNotEmpty()) {
                     LazyColumn(
-                        verticalArrangement = Arrangement.spacedBy(4.dp),
-                        modifier = Modifier.fillMaxWidth()
+                        verticalArrangement = Arrangement.spacedBy(Nadelon.Space.hair),
+                        modifier = Modifier.fillMaxWidth(),
                     ) {
                         items(results, key = { it.fileId }) { r ->
-                            Surface(
-                                onClick = { onPick(r) },
-                                shape = RoundedCornerShape(8.dp),
-                                color = MaterialTheme.colorScheme.surfaceVariant,
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Column(modifier = Modifier.padding(10.dp)) {
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        modifier = Modifier.fillMaxWidth()
-                                    ) {
-                                        Text(
-                                            text = r.featureTitle.ifBlank { r.fileName },
-                                            fontWeight = FontWeight.SemiBold,
-                                            modifier = Modifier.weight(1f),
-                                            maxLines = 2
-                                        )
-                                        Icon(
-                                            Icons.Filled.CloudDownload,
-                                            contentDescription = "Download"
-                                        )
-                                    }
-                                    val meta = buildString {
-                                        append(r.language.uppercase())
-                                        if (r.release.isNotBlank()) append(" · ${r.release}")
-                                        append(" · ${r.downloads} dl")
-                                        if (r.fromTrusted) append(" · trusted")
-                                    }
-                                    Text(
-                                        meta,
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
-                            }
-                            HorizontalDivider(color = MaterialTheme.colorScheme.surface)
+                            CatalogueEntry(result = r, onPick = { onPick(r) })
                         }
                     }
                 }
             }
         }
     )
+}
+
+@Composable
+private fun CatalogueEntry(
+    result: com.nadelon.app.data.OpenSubResult,
+    onPick: () -> Unit,
+) {
+    val palette = Nadelon.palette
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onPick() }
+            .padding(vertical = Nadelon.Space.snug + Nadelon.Space.tight)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = result.featureTitle.ifBlank { result.fileName },
+                color = palette.ink,
+                fontFamily = FontFamily.Serif,
+                fontWeight = FontWeight.SemiBold,
+                style = MaterialTheme.typography.bodyLarge,
+                modifier = Modifier.weight(1f),
+                maxLines = 2,
+            )
+            Icon(
+                imageVector = Icons.Filled.CloudDownload,
+                contentDescription = "Download",
+                tint = palette.margin,
+                modifier = Modifier.size(18.dp),
+            )
+        }
+        val meta = buildString {
+            append(result.language.uppercase())
+            if (result.release.isNotBlank()) append("  ·  ${result.release}")
+            append("  ·  ${result.downloads} dl")
+            if (result.fromTrusted) append("  ·  trusted")
+        }
+        Text(
+            text = meta,
+            style = MaterialTheme.typography.labelMedium,
+            color = palette.margin,
+        )
+        Spacer(Modifier.height(Nadelon.Space.snug))
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(0.5.dp)
+                .background(palette.oak)
+        )
+    }
 }
