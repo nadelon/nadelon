@@ -59,11 +59,16 @@ class MainActivity : ComponentActivity() {
             else -> null
         }
         uri ?: return
-        runCatching {
-            grantUriPermission(packageName, uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        }
-        runCatching {
-            contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        // Persistable permission only applies when the sender granted it explicitly.
+        // Most external players pass one-shot grants, which are already sufficient
+        // for this process to read via contentResolver during the session.
+        if (intent.flags and Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION != 0) {
+            runCatching {
+                contentResolver.takePersistableUriPermission(
+                    uri,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION
+                )
+            }
         }
         vm.setVideo(uri)
     }
@@ -88,19 +93,19 @@ private fun NadelonApp(vm: AppViewModel) {
                 NavigationBarItem(
                     selected = tab == Tab.Player,
                     onClick = { tab = Tab.Player },
-                    icon = { Icon(Icons.Filled.PlayCircle, contentDescription = null) },
+                    icon = { Icon(Icons.Filled.PlayCircle, contentDescription = "Player tab") },
                     label = { Text("Player") }
                 )
                 NavigationBarItem(
                     selected = tab == Tab.Vocab,
                     onClick = { tab = Tab.Vocab },
-                    icon = { Icon(Icons.Filled.Bookmark, contentDescription = null) },
+                    icon = { Icon(Icons.Filled.Bookmark, contentDescription = "Vocabulary tab") },
                     label = { Text("Vocabulary") }
                 )
                 NavigationBarItem(
                     selected = tab == Tab.Settings,
                     onClick = { tab = Tab.Settings },
-                    icon = { Icon(Icons.Filled.Settings, contentDescription = null) },
+                    icon = { Icon(Icons.Filled.Settings, contentDescription = "Settings tab") },
                     label = { Text("Settings") }
                 )
             }

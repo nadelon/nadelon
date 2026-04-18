@@ -2,7 +2,6 @@ package com.nadelon.app.ui
 
 import android.app.Application
 import android.net.Uri
-import android.provider.OpenableColumns
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.nadelon.app.data.OpenSubResult
@@ -12,6 +11,7 @@ import com.nadelon.app.data.SettingsStore
 import com.nadelon.app.data.SubtitleParser
 import com.nadelon.app.data.TranslationRepository
 import com.nadelon.app.data.VocabularyStore
+import com.nadelon.app.data.queryDisplayName
 import com.nadelon.app.model.SubtitleCue
 import com.nadelon.app.model.VocabEntry
 import kotlinx.coroutines.Dispatchers
@@ -66,7 +66,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     fun setVideo(uri: Uri) {
         _videoUri.value = uri
-        _videoDisplayName.value = queryDisplayName(uri)
+        _videoDisplayName.value = getApplication<Application>().queryDisplayName(uri)
     }
 
     fun loadSubtitles(uri: Uri, displayName: String?) {
@@ -124,21 +124,21 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun removeVocab(key: String) { viewModelScope.launch { vocabStore.remove(key) } }
     fun clearVocab() { viewModelScope.launch { vocabStore.clear() } }
 
-    fun saveCredentials(apiKey: String, username: String, password: String) {
-        viewModelScope.launch { settingsStore.update(apiKey, username, password) }
+    fun saveCredentials(apiKey: String, username: String) {
+        viewModelScope.launch { settingsStore.update(apiKey, username) }
     }
 
-    fun loginOpenSubs() {
+    fun loginOpenSubs(password: String) {
         viewModelScope.launch {
             val s = settings.value
-            if (s.apiKey.isBlank() || s.username.isBlank() || s.password.isBlank()) {
+            if (s.apiKey.isBlank() || s.username.isBlank() || password.isBlank()) {
                 _openSubsState.value = _openSubsState.value.copy(
                     message = "Add API key, username, and password first."
                 )
                 return@launch
             }
             _openSubsState.value = _openSubsState.value.copy(busy = true, message = null)
-            val result = openSubs.login(s.apiKey, s.username, s.password)
+            val result = openSubs.login(s.apiKey, s.username, password)
             _openSubsState.value = _openSubsState.value.copy(
                 busy = false,
                 message = result.fold({ "Logged in." }, { it.localizedMessage ?: "Login failed." })
@@ -222,12 +222,6 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             .takeIf { it.isNotBlank() }
     }
 
-    private fun queryDisplayName(uri: Uri): String? = runCatching {
-        getApplication<Application>().contentResolver.query(uri, null, null, null, null)?.use { c ->
-            val idx = c.getColumnIndex(OpenableColumns.DISPLAY_NAME)
-            if (idx >= 0 && c.moveToFirst()) c.getString(idx) else null
-        } ?: uri.lastPathSegment
-    }.getOrNull()
 }
 
 data class SelectedWord(

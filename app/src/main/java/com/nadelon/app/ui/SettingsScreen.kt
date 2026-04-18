@@ -21,10 +21,15 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.lifecycle.viewmodel.compose.viewModel
 
 @Composable
@@ -34,7 +39,8 @@ fun SettingsScreen(vm: AppViewModel = viewModel()) {
 
     var apiKey by rememberSaveable(settings.apiKey) { mutableStateOf(settings.apiKey) }
     var username by rememberSaveable(settings.username) { mutableStateOf(settings.username) }
-    var password by rememberSaveable(settings.password) { mutableStateOf(settings.password) }
+    // Password is intentionally transient: never persisted, cleared on successful login.
+    var password by remember { mutableStateOf("") }
 
     Column(
         modifier = Modifier
@@ -46,7 +52,8 @@ fun SettingsScreen(vm: AppViewModel = viewModel()) {
         Text("OpenSubtitles", fontWeight = FontWeight.Bold, fontSize = 20.sp)
         Text(
             "Create a free API key at opensubtitles.com → Consumers. " +
-                "A user account is required to download subtitles.",
+                "A user account is required to download subtitles. " +
+                "Your password is only used for login and is never stored on this device.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -68,20 +75,28 @@ fun SettingsScreen(vm: AppViewModel = viewModel()) {
         OutlinedTextField(
             value = password,
             onValueChange = { password = it },
-            label = { Text("Password") },
-            modifier = Modifier.fillMaxWidth(),
+            label = { Text("Password (not saved)") },
+            modifier = Modifier
+                .fillMaxWidth()
+                .semantics { contentDescription = "OpenSubtitles password, not saved" },
             singleLine = true,
-            visualTransformation = PasswordVisualTransformation()
+            visualTransformation = PasswordVisualTransformation(),
+            keyboardOptions = KeyboardOptions(
+                keyboardType = KeyboardType.Password,
+                imeAction = ImeAction.Done,
+                autoCorrect = false
+            )
         )
 
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(
-                onClick = { vm.saveCredentials(apiKey, username, password) }
+                onClick = { vm.saveCredentials(apiKey, username) }
             ) { Text("Save") }
             OutlinedButton(
                 onClick = {
-                    vm.saveCredentials(apiKey, username, password)
-                    vm.loginOpenSubs()
+                    vm.saveCredentials(apiKey, username)
+                    vm.loginOpenSubs(password)
+                    password = ""
                 },
                 enabled = !openSubs.busy
             ) { Text(if (openSubs.busy) "Working…" else "Save & log in") }

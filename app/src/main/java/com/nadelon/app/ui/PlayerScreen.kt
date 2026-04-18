@@ -1,7 +1,6 @@
 package com.nadelon.app.ui
 
 import android.net.Uri
-import android.provider.OpenableColumns
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -28,10 +27,10 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Divider
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -47,6 +46,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -60,7 +62,9 @@ import androidx.media3.common.MediaItem
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 import com.nadelon.app.data.SubtitleParser
+import com.nadelon.app.data.queryDisplayName
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 
 private val LANG_OPTIONS = listOf(
     "auto" to "Auto-detect",
@@ -96,7 +100,21 @@ fun PlayerScreen(vm: AppViewModel = viewModel()) {
     val exoPlayer = remember {
         ExoPlayer.Builder(context).build().apply { playWhenReady = false }
     }
-    DisposableEffect(Unit) { onDispose { exoPlayer.release() } }
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    DisposableEffect(lifecycle) {
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_PAUSE -> exoPlayer.playWhenReady = false
+                Lifecycle.Event.ON_STOP -> exoPlayer.pause()
+                else -> Unit
+            }
+        }
+        lifecycle.addObserver(observer)
+        onDispose {
+            lifecycle.removeObserver(observer)
+            exoPlayer.release()
+        }
+    }
     LaunchedEffect(videoUri) {
         val uri = videoUri ?: return@LaunchedEffect
         exoPlayer.setMediaItem(MediaItem.fromUri(uri))
@@ -106,9 +124,9 @@ fun PlayerScreen(vm: AppViewModel = viewModel()) {
 
     var positionMs by remember { mutableStateOf(0L) }
     LaunchedEffect(exoPlayer) {
-        while (true) {
-            positionMs = exoPlayer.currentPosition
-            delay(100)
+        while (isActive) {
+            if (exoPlayer.isPlaying) positionMs = exoPlayer.currentPosition
+            delay(150)
         }
     }
 
@@ -127,10 +145,7 @@ fun PlayerScreen(vm: AppViewModel = viewModel()) {
     val subsPicker = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument()
     ) { uri: Uri? ->
-        uri?.let {
-            val name = queryDisplayName(context, it)
-            vm.loadSubtitles(it, name)
-        }
+        uri?.let { vm.loadSubtitles(it, context.queryDisplayName(it)) }
     }
 
     val currentCue = remember(cues, positionMs) {
@@ -374,15 +389,6 @@ private fun LangDropdown(
     }
 }
 
-private fun queryDisplayName(context: android.content.Context, uri: Uri): String? {
-    return runCatching {
-        context.contentResolver.query(uri, null, null, null, null)?.use { c ->
-            val idx = c.getColumnIndex(OpenableColumns.DISPLAY_NAME)
-            if (idx >= 0 && c.moveToFirst()) c.getString(idx) else null
-        }
-    }.getOrNull()
-}
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun OpenSubsDialog(
@@ -474,7 +480,7 @@ private fun OpenSubsDialog(
                                     )
                                 }
                             }
-                            Divider(color = MaterialTheme.colorScheme.surface)
+                            HorizontalDivider(color = MaterialTheme.colorScheme.surface)
                         }
                     }
                 }
