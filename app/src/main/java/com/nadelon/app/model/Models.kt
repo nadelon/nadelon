@@ -9,6 +9,14 @@ data class SubtitleCue(
 )
 
 @Serializable
+data class SavedLink(
+    val url: String,
+    val title: String,
+    val isVideo: Boolean = false,
+    val savedAt: Long = System.currentTimeMillis()
+)
+
+@Serializable
 data class VocabEntry(
     val term: String,
     val translation: String,

@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoStories
+import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Lightbulb
 import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -50,6 +51,7 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.unit.dp
 import com.nadelon.app.R
 import com.nadelon.app.ui.AppViewModel
+import com.nadelon.app.ui.BrowserScreen
 import com.nadelon.app.ui.PlayerScreen
 import com.nadelon.app.ui.SettingsScreen
 import com.nadelon.app.ui.VocabularyScreen
@@ -123,6 +125,7 @@ private fun NadelonApp(vm: AppViewModel) {
         ) {
             when (tab) {
                 Tab.Watch -> PlayerScreen(vm = vm)
+                Tab.Browse -> BrowserScreen(vm = vm, onPlayVideo = { tab = Tab.Watch })
                 Tab.Notebook -> VocabularyScreen(vm = vm)
                 Tab.Study -> SettingsScreen(vm = vm)
             }
@@ -199,6 +202,13 @@ private fun ReadingRoomNav(selected: Tab, onSelect: (Tab) -> Unit) {
                 modifier = Modifier.weight(1f),
             )
             NavVerb(
+                label = "Browse",
+                icon = Icons.Filled.Language,
+                selected = selected == Tab.Browse,
+                onClick = { onSelect(Tab.Browse) },
+                modifier = Modifier.weight(1f),
+            )
+            NavVerb(
                 label = "Notebook",
                 icon = Icons.Filled.AutoStories,
                 selected = selected == Tab.Notebook,
@@ -256,4 +266,4 @@ private fun NavVerb(
     }
 }
 
-private enum class Tab { Watch, Notebook, Study }
+private enum class Tab { Watch, Browse, Notebook, Study }

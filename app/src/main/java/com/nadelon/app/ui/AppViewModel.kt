@@ -6,12 +6,14 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.nadelon.app.data.OpenSubResult
 import com.nadelon.app.data.OpenSubtitlesRepository
+import com.nadelon.app.data.SavedLinksStore
 import com.nadelon.app.data.Settings
 import com.nadelon.app.data.SettingsStore
 import com.nadelon.app.data.SubtitleParser
 import com.nadelon.app.data.TranslationRepository
 import com.nadelon.app.data.VocabularyStore
 import com.nadelon.app.data.queryDisplayName
+import com.nadelon.app.model.SavedLink
 import com.nadelon.app.model.SubtitleCue
 import com.nadelon.app.model.VocabEntry
 import kotlinx.coroutines.Dispatchers
@@ -28,6 +30,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     private val translator = TranslationRepository()
     private val vocabStore = VocabularyStore(app)
+    private val linksStore = SavedLinksStore(app)
     private val settingsStore = SettingsStore(app)
     private val openSubs = OpenSubtitlesRepository(settingsStore)
 
@@ -61,8 +64,16 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     val vocabulary: StateFlow<List<VocabEntry>> = vocabStore.entries
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
+    val savedLinks: StateFlow<List<SavedLink>> = linksStore.links
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
     val settings: StateFlow<Settings> = settingsStore.settings
         .stateIn(viewModelScope, SharingStarted.Eagerly, Settings())
+
+    private val _browserUrl = MutableStateFlow("https://duckduckgo.com")
+    val browserUrl: StateFlow<String> = _browserUrl.asStateFlow()
+
+    fun setBrowserUrl(url: String) { _browserUrl.value = url }
 
     private var translationJob: Job? = null
     private var searchJob: Job? = null
@@ -134,6 +145,14 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     fun removeVocab(key: String) { viewModelScope.launch { vocabStore.remove(key) } }
     fun clearVocab() { viewModelScope.launch { vocabStore.clear() } }
+
+    fun saveLink(url: String, title: String, isVideo: Boolean = false) {
+        viewModelScope.launch {
+            linksStore.save(SavedLink(url = url, title = title.ifBlank { url }, isVideo = isVideo))
+        }
+    }
+
+    fun removeLink(url: String) { viewModelScope.launch { linksStore.remove(url) } }
 
     fun saveCredentials(apiKey: String, username: String) {
         viewModelScope.launch { settingsStore.update(apiKey, username) }
