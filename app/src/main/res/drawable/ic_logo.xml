@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- In-app logo mark: globe + play, transparent background -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="32dp"
+    android:height="32dp"
+    android:viewportWidth="32"
+    android:viewportHeight="32">
+
+    <!-- Globe body -->
+    <path
+        android:fillColor="#1D1A28"
+        android:pathData="M16,2
+                          A14,14 0 0,1 30,16
+                          A14,14 0 0,1 16,30
+                          A14,14 0 0,1 2,16
+                          A14,14 0 0,1 16,2 Z" />
+
+    <!-- Globe grid lines, clipped to the circle -->
+    <group>
+        <clip-path
+            android:pathData="M16,2
+                              A14,14 0 0,1 30,16
+                              A14,14 0 0,1 16,30
+                              A14,14 0 0,1 2,16
+                              A14,14 0 0,1 16,2 Z" />
+
+        <!-- Equator -->
+        <path
+            android:fillColor="#00000000"
+            android:strokeColor="#4A3F6B"
+            android:strokeWidth="0.8"
+            android:pathData="M2,16 H30" />
+
+        <!-- Prime meridian -->
+        <path
+            android:fillColor="#00000000"
+            android:strokeColor="#4A3F6B"
+            android:strokeWidth="0.8"
+            android:pathData="M16,2 V30" />
+
+        <!-- Left longitude arc -->
+        <path
+            android:fillColor="#00000000"
+            android:strokeColor="#4A3F6B"
+            android:strokeWidth="0.8"
+            android:pathData="M16,2 Q7,16 16,30" />
+
+        <!-- Right longitude arc -->
+        <path
+            android:fillColor="#00000000"
+            android:strokeColor="#4A3F6B"
+            android:strokeWidth="0.8"
+            android:pathData="M16,2 Q25,16 16,30" />
+
+        <!-- Upper latitude arc -->
+        <path
+            android:fillColor="#00000000"
+            android:strokeColor="#4A3F6B"
+            android:strokeWidth="0.8"
+            android:pathData="M6,10 Q16,7 26,10" />
+
+        <!-- Lower latitude arc -->
+        <path
+            android:fillColor="#00000000"
+            android:strokeColor="#4A3F6B"
+            android:strokeWidth="0.8"
+            android:pathData="M6,22 Q16,25 26,22" />
+    </group>
+
+    <!-- Globe outline ring -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#5C5080"
+        android:strokeWidth="1.0"
+        android:pathData="M16,2
+                          A14,14 0 0,1 30,16
+                          A14,14 0 0,1 16,30
+                          A14,14 0 0,1 2,16
+                          A14,14 0 0,1 16,2 Z" />
+
+    <!-- Play triangle — amber -->
+    <path
+        android:fillColor="#E4A34A"
+        android:pathData="M11,9 L23,16 L11,23 Z" />
+
+</vector>

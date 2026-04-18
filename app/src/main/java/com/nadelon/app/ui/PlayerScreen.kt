@@ -23,7 +23,10 @@ import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material.icons.filled.PlayArrow
@@ -56,12 +59,21 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.window.DialogWindowProvider
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.media3.common.MediaItem
 import androidx.media3.exoplayer.ExoPlayer
@@ -105,10 +117,40 @@ fun PlayerScreen(vm: AppViewModel = viewModel()) {
     val pauseOnTap by vm.pauseOnTap.collectAsState()
     val selected by vm.selectedWord.collectAsState()
     val openSubs by vm.openSubsState.collectAsState()
+    val fullscreen by vm.fullscreen.collectAsState()
 
     val exoPlayer = remember {
         ExoPlayer.Builder(context).build().apply { playWhenReady = false }
     }
+
+    // Two PlayerViews: one embedded (16:9 box), one for the fullscreen overlay.
+    // switchTargetView transfers the surface without a black flash.
+    val normalPlayerView = remember(exoPlayer) {
+        PlayerView(context).apply {
+            useController = true
+            player = exoPlayer
+            setShowSubtitleButton(false)
+            setFullscreenButtonClickListener { vm.setFullscreen(it) }
+        }
+    }
+    val fullscreenPlayerView = remember {
+        PlayerView(context).apply {
+            useController = true
+            setShowSubtitleButton(false)
+            // No fullscreen listener here — exit is handled by the Compose overlay button
+            // and the system back gesture (onDismissRequest).
+        }
+    }
+
+    // Hand the player off to whichever view should be rendering it.
+    LaunchedEffect(fullscreen) {
+        if (fullscreen) {
+            PlayerView.switchTargetView(exoPlayer, normalPlayerView, fullscreenPlayerView)
+        } else {
+            PlayerView.switchTargetView(exoPlayer, fullscreenPlayerView, normalPlayerView)
+        }
+    }
+
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     DisposableEffect(lifecycle) {
         val observer = LifecycleEventObserver { _, event ->
@@ -161,6 +203,8 @@ fun PlayerScreen(vm: AppViewModel = viewModel()) {
         SubtitleParser.cueAt(cues, positionMs)
     }
 
+    var showUrlDialog by remember { mutableStateOf(false) }
+
     val palette = Nadelon.palette
 
     Column(
@@ -187,13 +231,7 @@ fun PlayerScreen(vm: AppViewModel = viewModel()) {
         ) {
             if (videoUri != null) {
                 AndroidView(
-                    factory = { ctx ->
-                        PlayerView(ctx).apply {
-                            useController = true
-                            player = exoPlayer
-                            setShowSubtitleButton(false)
-                        }
-                    },
+                    factory = { normalPlayerView },
                     modifier = Modifier.fillMaxSize()
                 )
                 SubtitleOverlay(
@@ -205,7 +243,8 @@ fun PlayerScreen(vm: AppViewModel = viewModel()) {
                 )
             } else {
                 EmptyFrame(
-                    onPickVideo = { videoPicker.launch(arrayOf("video/*")) }
+                    onPickVideo = { videoPicker.launch(arrayOf("video/*")) },
+                    onStreamUrl = { showUrlDialog = true },
                 )
             }
         }
@@ -230,6 +269,7 @@ fun PlayerScreen(vm: AppViewModel = viewModel()) {
             onTargetLang = vm::setTargetLang,
             onFindSubtitles = { vm.searchOpenSubs() },
             findBusy = openSubs.busy,
+            onStreamUrl = { showUrlDialog = true },
         )
 
         // Margin note: cue count + pause-on-tap as a subtle toggle, never a chip.
@@ -254,6 +294,80 @@ fun PlayerScreen(vm: AppViewModel = viewModel()) {
         }
     }
 
+    // Fullscreen overlay — a Dialog that covers the entire screen including system bars.
+    if (fullscreen) {
+        Dialog(
+            onDismissRequest = { vm.setFullscreen(false) },
+            properties = DialogProperties(
+                usePlatformDefaultWidth = false,
+                decorFitsSystemWindows = false,
+            )
+        ) {
+            val dialogView = LocalView.current
+            val dialogWindow = (dialogView.parent as? DialogWindowProvider)?.window
+
+            LaunchedEffect(dialogWindow) {
+                dialogWindow?.let { window ->
+                    WindowCompat.setDecorFitsSystemWindows(window, false)
+                    WindowInsetsControllerCompat(window, dialogView).apply {
+                        hide(WindowInsetsCompat.Type.systemBars())
+                        systemBarsBehavior =
+                            WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                    }
+                }
+            }
+            DisposableEffect(Unit) {
+                onDispose {
+                    dialogWindow?.let { window ->
+                        WindowInsetsControllerCompat(window, dialogView)
+                            .show(WindowInsetsCompat.Type.systemBars())
+                    }
+                }
+            }
+
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black)
+            ) {
+                AndroidView(
+                    factory = { fullscreenPlayerView },
+                    modifier = Modifier.fillMaxSize()
+                )
+                SubtitleOverlay(
+                    cue = currentCue,
+                    onWordTap = { word, line ->
+                        if (pauseOnTap && exoPlayer.isPlaying) exoPlayer.pause()
+                        vm.selectWord(word, line)
+                    }
+                )
+                // Explicit exit button — back gesture also works via onDismissRequest.
+                IconButton(
+                    onClick = { vm.setFullscreen(false) },
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(Nadelon.Space.reading)
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Close,
+                        contentDescription = "Exit fullscreen",
+                        tint = Color.White,
+                    )
+                }
+            }
+        }
+    }
+
+    if (showUrlDialog) {
+        UrlInputDialog(
+            onConfirm = { url ->
+                if (url.isNotBlank()) vm.setVideoFromUrl(url)
+                showUrlDialog = false
+            },
+            onDismiss = { showUrlDialog = false }
+        )
+    }
+
     if (openSubs.showResults) {
         OpenSubsDialog(
             query = openSubs.lastQuery,
@@ -269,7 +383,7 @@ fun PlayerScreen(vm: AppViewModel = viewModel()) {
 }
 
 @Composable
-private fun EmptyFrame(onPickVideo: () -> Unit) {
+private fun EmptyFrame(onPickVideo: () -> Unit, onStreamUrl: () -> Unit) {
     val palette = Nadelon.palette
     Column(
         modifier = Modifier.fillMaxSize(),
@@ -292,6 +406,8 @@ private fun EmptyFrame(onPickVideo: () -> Unit) {
         )
         Spacer(Modifier.height(Nadelon.Space.reading))
         TextLink(text = "Open a film", onClick = onPickVideo)
+        Spacer(Modifier.height(Nadelon.Space.snug))
+        TextLink(text = "Stream from URL", onClick = onStreamUrl)
     }
 }
 
@@ -306,6 +422,7 @@ private fun Shelf(
     onTargetLang: (String) -> Unit,
     onFindSubtitles: () -> Unit,
     findBusy: Boolean,
+    onStreamUrl: () -> Unit,
 ) {
     val palette = Nadelon.palette
     Column(verticalArrangement = Arrangement.spacedBy(Nadelon.Space.snug)) {
@@ -317,6 +434,11 @@ private fun Shelf(
             ShelfButton(
                 label = if (hasVideo) "Film" else "Open film",
                 onClick = onPickVideo,
+                modifier = Modifier.weight(1f),
+            )
+            ShelfButton(
+                label = "Stream",
+                onClick = onStreamUrl,
                 modifier = Modifier.weight(1f),
             )
             ShelfButton(
@@ -494,6 +616,43 @@ private fun TextLink(text: String, onClick: () -> Unit) {
         style = MaterialTheme.typography.labelLarge,
         textDecoration = TextDecoration.Underline,
         modifier = Modifier.clickable { onClick() }
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun UrlInputDialog(onConfirm: (String) -> Unit, onDismiss: () -> Unit) {
+    var url by remember { mutableStateOf("") }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        shape = RoundedCornerShape(Nadelon.Radius.dialog),
+        title = {
+            Text(
+                "Stream from URL",
+                style = MaterialTheme.typography.titleLarge,
+            )
+        },
+        text = {
+            OutlinedTextField(
+                value = url,
+                onValueChange = { url = it },
+                label = { Text("https://…") },
+                singleLine = true,
+                shape = RoundedCornerShape(Nadelon.Radius.input),
+                modifier = Modifier.fillMaxWidth(),
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.Uri,
+                    imeAction = ImeAction.Done,
+                ),
+                keyboardActions = KeyboardActions(onDone = { onConfirm(url) }),
+            )
+        },
+        confirmButton = {
+            TextButton(onClick = { onConfirm(url) }) { Text("Play") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("cancel") }
+        }
     )
 }
 
