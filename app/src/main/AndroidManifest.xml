@@ -31,16 +31,17 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
+            <!-- MIME type only — for intents that carry a type but no URI scheme -->
             <intent-filter android:label="@string/app_name">
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE" />
                 <data android:mimeType="video/*" />
                 <data android:mimeType="application/x-mpegURL" />
                 <data android:mimeType="application/vnd.apple.mpegurl" />
                 <data android:mimeType="application/dash+xml" />
             </intent-filter>
 
+            <!-- URI scheme only — for intents with a URL but no MIME type -->
             <intent-filter android:label="@string/app_name">
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
@@ -49,6 +50,24 @@
                 <data android:scheme="file" />
                 <data android:scheme="http" />
                 <data android:scheme="https" />
+                <data android:scheme="rtsp" />
+            </intent-filter>
+
+            <!-- URI + MIME type — Android requires both in one filter when the intent
+                 carries both (e.g. Stremio's "Play on external player"). -->
+            <intent-filter android:label="@string/app_name">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="http" />
+                <data android:scheme="https" />
+                <data android:scheme="content" />
+                <data android:scheme="file" />
+                <data android:scheme="rtsp" />
+                <data android:mimeType="video/*" />
+                <data android:mimeType="application/x-mpegURL" />
+                <data android:mimeType="application/vnd.apple.mpegurl" />
+                <data android:mimeType="application/dash+xml" />
             </intent-filter>
 
             <intent-filter android:label="@string/app_name">
