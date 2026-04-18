@@ -11,6 +11,8 @@ Android media player for language learners. Tap any word in the on-screen subtit
 - Search / remove / clear saved vocabulary.
 - "Pause on tap" toggle to freeze playback while you study a line.
 - Selectable source and target languages.
+- **OpenSubtitles integration**: search + download subtitles by title. Requires a free API key and account (configured in Settings → OpenSubtitles).
+- **External player**: Nadelon registers VIEW/SEND intents for `video/*`, HLS and DASH, plus `content://`, `file://`, `http(s)://` schemes. Other apps can open a video "with Nadelon" and it will start playing immediately.
 
 ## Project layout
 

@@ -16,19 +16,26 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.CloudDownload
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Subtitles
 import androidx.compose.material.icons.filled.VideoLibrary
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Divider
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -84,6 +91,7 @@ fun PlayerScreen(vm: AppViewModel = viewModel()) {
     val targetLang by vm.targetLang.collectAsState()
     val pauseOnTap by vm.pauseOnTap.collectAsState()
     val selected by vm.selectedWord.collectAsState()
+    val openSubs by vm.openSubsState.collectAsState()
 
     val exoPlayer = remember {
         ExoPlayer.Builder(context).build().apply { playWhenReady = false }
@@ -185,6 +193,21 @@ fun PlayerScreen(vm: AppViewModel = viewModel()) {
             )
         }
 
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            OutlinedButton(
+                onClick = { vm.searchOpenSubs() },
+                enabled = !openSubs.busy,
+                modifier = Modifier.weight(1f)
+            ) {
+                Icon(Icons.Filled.Search, contentDescription = null)
+                Text("  Find subtitles", maxLines = 1)
+            }
+        }
+
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -228,6 +251,14 @@ fun PlayerScreen(vm: AppViewModel = viewModel()) {
             )
         }
 
+        openSubs.message?.takeIf { !openSubs.showResults }?.let { msg ->
+            Text(
+                msg,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+
         selected?.let { sel ->
             TranslationCard(
                 term = sel.term,
@@ -237,6 +268,19 @@ fun PlayerScreen(vm: AppViewModel = viewModel()) {
                 onDismiss = vm::dismissWord
             )
         }
+    }
+
+    if (openSubs.showResults) {
+        OpenSubsDialog(
+            query = openSubs.lastQuery,
+            busy = openSubs.busy,
+            results = openSubs.results,
+            message = openSubs.message,
+            onQueryChange = vm::setOpenSubsQuery,
+            onSearch = { vm.searchOpenSubs(openSubs.lastQuery) },
+            onPick = { r -> vm.downloadSubtitle(r.fileId, r.fileName) },
+            onDismiss = vm::dismissOpenSubsResults
+        )
     }
 }
 
@@ -337,4 +381,104 @@ private fun queryDisplayName(context: android.content.Context, uri: Uri): String
             if (idx >= 0 && c.moveToFirst()) c.getString(idx) else null
         }
     }.getOrNull()
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun OpenSubsDialog(
+    query: String,
+    busy: Boolean,
+    results: List<com.nadelon.app.data.OpenSubResult>,
+    message: String?,
+    onQueryChange: (String) -> Unit,
+    onSearch: () -> Unit,
+    onPick: (com.nadelon.app.data.OpenSubResult) -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } },
+        title = { Text("Find subtitles") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    OutlinedTextField(
+                        value = query,
+                        onValueChange = onQueryChange,
+                        modifier = Modifier.weight(1f),
+                        label = { Text("Movie / show title") },
+                        singleLine = true
+                    )
+                    Button(onClick = onSearch, enabled = !busy) { Text("Search") }
+                }
+                if (busy) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(14.dp),
+                            strokeWidth = 2.dp
+                        )
+                        Text("Working…", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+                message?.let {
+                    Text(
+                        it,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                if (results.isNotEmpty()) {
+                    LazyColumn(
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        items(results, key = { it.fileId }) { r ->
+                            Surface(
+                                onClick = { onPick(r) },
+                                shape = RoundedCornerShape(8.dp),
+                                color = MaterialTheme.colorScheme.surfaceVariant,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Column(modifier = Modifier.padding(10.dp)) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Text(
+                                            text = r.featureTitle.ifBlank { r.fileName },
+                                            fontWeight = FontWeight.SemiBold,
+                                            modifier = Modifier.weight(1f),
+                                            maxLines = 2
+                                        )
+                                        Icon(
+                                            Icons.Filled.CloudDownload,
+                                            contentDescription = "Download"
+                                        )
+                                    }
+                                    val meta = buildString {
+                                        append(r.language.uppercase())
+                                        if (r.release.isNotBlank()) append(" · ${r.release}")
+                                        append(" · ${r.downloads} dl")
+                                        if (r.fromTrusted) append(" · trusted")
+                                    }
+                                    Text(
+                                        meta,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                            Divider(color = MaterialTheme.colorScheme.surface)
+                        }
+                    }
+                }
+            }
+        }
+    )
 }
