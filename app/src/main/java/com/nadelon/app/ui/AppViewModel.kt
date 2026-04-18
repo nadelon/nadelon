@@ -75,6 +75,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     fun setBrowserUrl(url: String) { _browserUrl.value = url }
 
+    // Pulsed by external intents so NadelonApp can switch to the Watch tab.
+    private val _watchTabRequest = MutableStateFlow(0L)
+    val watchTabRequest: StateFlow<Long> = _watchTabRequest.asStateFlow()
+    fun requestWatchTab() { _watchTabRequest.value = System.currentTimeMillis() }
+
     private var translationJob: Job? = null
     private var searchJob: Job? = null
 

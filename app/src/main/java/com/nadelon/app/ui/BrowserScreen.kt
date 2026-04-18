@@ -111,6 +111,35 @@ private const val CAPTURE_JS = """
 
 private val mainHandler = Handler(Looper.getMainLooper())
 
+// Injected after every page load to hook the History API.
+// SPAs like YouTube update the URL via pushState/replaceState without a real
+// navigation event, so WebViewClient.onPageStarted never fires for them.
+// The guard prevents double-hooking on the same page.
+private const val HISTORY_HOOK_JS = """
+(function() {
+    if (window.__nadelonHooked) return;
+    window.__nadelonHooked = true;
+    var _push    = history.pushState.bind(history);
+    var _replace = history.replaceState.bind(history);
+    function notify() {
+        try { NadelonBridge.onUrlChange(window.location.href); } catch(e) {}
+    }
+    history.pushState    = function() { _push.apply(this, arguments);    notify(); };
+    history.replaceState = function() { _replace.apply(this, arguments); notify(); };
+    window.addEventListener('popstate', notify);
+})();
+"""
+
+// Exposed to page JavaScript. Only trusted strings (http/https URLs) are forwarded.
+private class NadelonJsBridge(private val onUrlChange: (String) -> Unit) {
+    @android.webkit.JavascriptInterface
+    fun onUrlChange(url: String) {
+        if (url.startsWith("http://") || url.startsWith("https://")) {
+            mainHandler.post { onUrlChange(url) }
+        }
+    }
+}
+
 private enum class BrowsePane { Web, Saved }
 
 @SuppressLint("SetJavaScriptEnabled")
@@ -143,8 +172,17 @@ fun BrowserScreen(vm: AppViewModel, onPlayVideo: () -> Unit) {
                 displayZoomControls = false
                 mediaPlaybackRequiresUserGesture = false
             }
+            // JS bridge — lets the History API hook report SPA URL changes back to Compose.
+            addJavascriptInterface(
+                NadelonJsBridge { url ->
+                    currentUrl = url
+                    addressInput = url
+                    vm.setBrowserUrl(url)
+                },
+                "NadelonBridge"
+            )
             webViewClient = object : WebViewClient() {
-                // Intercept every network request to catch video streams as they load.
+                // Intercept every network request to catch video stream URLs as they load.
                 override fun shouldInterceptRequest(
                     view: WebView,
                     request: WebResourceRequest,
@@ -169,6 +207,8 @@ fun BrowserScreen(vm: AppViewModel, onPlayVideo: () -> Unit) {
                     isLoading = false
                     canGoBack = view.canGoBack()
                     canGoForward = view.canGoForward()
+                    // Hook the History API so SPA navigation (YouTube, etc.) updates the address bar.
+                    view.evaluateJavascript(HISTORY_HOOK_JS, null)
                 }
             }
             webChromeClient = object : WebChromeClient() {

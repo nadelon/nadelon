@@ -34,6 +34,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -84,15 +86,22 @@ class MainActivity : ComponentActivity() {
             else -> null
         }
         uri ?: return
-        if (intent.flags and Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION != 0) {
-            runCatching {
-                contentResolver.takePersistableUriPermission(
-                    uri,
-                    Intent.FLAG_GRANT_READ_URI_PERMISSION
-                )
+        // HTTP/HTTPS URIs (e.g. from Stremio) are played directly as URLs.
+        // Content/file URIs need a persistable permission grant first.
+        if (uri.scheme == "http" || uri.scheme == "https") {
+            vm.setVideoFromUrl(uri.toString())
+        } else {
+            if (intent.flags and Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION != 0) {
+                runCatching {
+                    contentResolver.takePersistableUriPermission(
+                        uri,
+                        Intent.FLAG_GRANT_READ_URI_PERMISSION
+                    )
+                }
             }
+            vm.setVideo(uri)
         }
-        vm.setVideo(uri)
+        vm.requestWatchTab()
     }
 
     @Suppress("DEPRECATION")
@@ -110,6 +119,10 @@ class MainActivity : ComponentActivity() {
 private fun NadelonApp(vm: AppViewModel) {
     var tab by remember { mutableStateOf(Tab.Watch) }
     val palette = Nadelon.palette
+
+    // Switch to Watch whenever an external intent delivers a video (e.g. Stremio).
+    val watchTabRequest by vm.watchTabRequest.collectAsState()
+    LaunchedEffect(watchTabRequest) { if (watchTabRequest > 0L) tab = Tab.Watch }
 
     Scaffold(
         containerColor = palette.dusk,
