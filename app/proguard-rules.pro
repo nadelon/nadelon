@@ -17,3 +17,8 @@
 
 # Kotlin metadata used by reflection.
 -keep class kotlin.Metadata { *; }
+
+# Cast framework: OptionsProvider is loaded by name from AndroidManifest meta-data.
+-keep class com.nadelon.app.cast.NadelonCastOptionsProvider { *; }
+-keep class com.google.android.gms.cast.framework.** { *; }
+-dontwarn com.google.android.gms.**

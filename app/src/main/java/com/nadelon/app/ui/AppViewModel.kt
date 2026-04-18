@@ -49,6 +49,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     private val _pauseOnTap = MutableStateFlow(true)
     val pauseOnTap: StateFlow<Boolean> = _pauseOnTap.asStateFlow()
 
+    private val _fullscreen = MutableStateFlow(false)
+    val fullscreen: StateFlow<Boolean> = _fullscreen.asStateFlow()
+
     private val _selectedWord = MutableStateFlow<SelectedWord?>(null)
     val selectedWord: StateFlow<SelectedWord?> = _selectedWord.asStateFlow()
 
@@ -68,6 +71,14 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         _videoUri.value = uri
         _videoDisplayName.value = getApplication<Application>().queryDisplayName(uri)
     }
+
+    fun setVideoFromUrl(url: String) {
+        val uri = runCatching { Uri.parse(url) }.getOrNull() ?: return
+        _videoUri.value = uri
+        _videoDisplayName.value = uri.lastPathSegment ?: url
+    }
+
+    fun setFullscreen(value: Boolean) { _fullscreen.value = value }
 
     fun loadSubtitles(uri: Uri, displayName: String?) {
         viewModelScope.launch {
