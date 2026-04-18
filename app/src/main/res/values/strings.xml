@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Nadelon</string>
+    <string name="tab_player">Player</string>
+    <string name="tab_vocab">Vocabulary</string>
+    <string name="pick_video">Pick video</string>
+    <string name="pick_subtitles">Pick subtitles (.srt / .vtt)</string>
+    <string name="source_language">From</string>
+    <string name="target_language">To</string>
+    <string name="save_word">Save</string>
+    <string name="dismiss">Close</string>
+    <string name="translating">Translating…</string>
+    <string name="translation_failed">Translation unavailable.</string>
+    <string name="vocab_empty">No saved words yet. Tap a word in a subtitle, then press Save.</string>
+    <string name="search_vocab">Search vocabulary</string>
+    <string name="remove">Remove</string>
+    <string name="clear_all">Clear all</string>
+    <string name="confirm_clear">Clear saved vocabulary?</string>
+    <string name="cancel">Cancel</string>
+    <string name="confirm">Confirm</string>
+    <string name="no_subs_loaded">No subtitles loaded. Pick a .srt or .vtt file.</string>
+    <string name="hint_tap">Tap any word in the subtitles to translate.</string>
+</resources>
