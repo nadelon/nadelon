@@ -67,12 +67,28 @@ chess/src/main/java/com/nadelon/chess/
 ## Build & test
 
 Open the project in Android Studio and run the `:chess` configuration on
-API 24+, or:
+API 24+. From the command line, use the Gradle wrapper (or a local `gradle`
+8.7+ if no wrapper jar is present):
 
 ```
-./gradlew :chess:assembleDebug
-./gradlew :chess:testDebugUnitTest   # perft, SAN round-trip, and pipeline tests
+./gradlew :chess:assembleDebug          # APK -> chess/build/outputs/apk/debug/
+./gradlew :chess:testDebugUnitTest      # perft, SAN round-trip, and pipeline tests
 ```
+
+## Download a prebuilt APK
+
+A GitHub Actions workflow (`.github/workflows/chess-build.yml`) builds the APK
+on every push to the feature branch and publishes it two ways:
+
+- as a build **artifact** on the workflow run (Actions tab → latest run →
+  *chess-coach-debug-apk*), and
+- attached to a rolling **pre-release** tagged `chess-coach-latest`
+  (repo → Releases → *Chess Coach (latest debug build)* →
+  `chess-coach-debug.apk`).
+
+Download the APK to an Android device (API 24+) and install it; you may need to
+allow installing apps from unknown sources. You can also trigger a build
+manually from the Actions tab via *Run workflow*.
 
 ## Notes
 
