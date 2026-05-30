@@ -36,18 +36,16 @@ object Pgn {
         val lines = pgn.replace("\r\n", "\n").split("\n")
         val current = StringBuilder()
         var sawMovesAfterTags = false
-        var inTags = false
         for (line in lines) {
             val isTag = line.startsWith("[")
             if (isTag && sawMovesAfterTags) {
-                // start of a new game
+                // a tag line following movetext marks the start of the next game
                 games.add(current.toString())
                 current.clear()
                 sawMovesAfterTags = false
             }
             if (!isTag && line.isNotBlank()) sawMovesAfterTags = true
             current.append(line).append('\n')
-            inTags = isTag
         }
         if (current.isNotBlank()) games.add(current.toString())
         return games.filter { it.contains("[") }
