@@ -15,3 +15,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "Nadelon"
 include(":app")
+include(":chess")

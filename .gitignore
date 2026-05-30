@@ -9,6 +9,7 @@
 .cxx
 /app/build
 /app/release
+/chess/build
 *.apk
 *.aab
 *.keystore
